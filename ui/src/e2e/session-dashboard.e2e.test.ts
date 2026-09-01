@@ -6,6 +6,7 @@ import { expect, it } from "vitest";
 import { GATEWAY_SERVER_CAPS } from "../../../packages/gateway-protocol/src/index.js";
 import { SANDBOX_HOST_PATH } from "../../../src/agents/sandbox-host.js";
 import { createSandboxHostHttpServer } from "../../../src/gateway/mcp-app-sandbox-http.js";
+import { workboardUi } from "../pages/workboard/workboard.e2e.test-support.ts";
 import {
   controlUiBundledSettingsStorageKey,
   controlUiSessionUrl,
@@ -604,6 +605,7 @@ suite.define(() => {
     const readyCard = {
       id: "card-widget-ready",
       title: "Rebase plugin widget kinds",
+      sessionKey,
       status: "ready",
       priority: "high",
       labels: ["dashboard"],
@@ -615,6 +617,7 @@ suite.define(() => {
     };
     const runningCard = { ...readyCard, status: "running", position: 2_000, updatedAt: 3 };
     const gateway = await installMockGateway(page, {
+      ...workboardUi,
       sessionKey,
       controlUiWidgetKinds: [
         { pluginId: "workboard", kind: "workboard:card", label: "Workboard card" },
@@ -637,6 +640,7 @@ suite.define(() => {
               ...readyCard,
               id: "card-widget-running",
               title: "Already running",
+              sessionKey: undefined,
               status: "running",
               position: 1_000,
             },
@@ -656,9 +660,14 @@ suite.define(() => {
       await miniWidget.waitFor();
       await expect.poll(() => cardWidget.textContent()).toContain("Rebase plugin widget kinds");
       await expect.poll(() => miniWidget.textContent()).toContain("Already running");
-      expect(await miniWidget.getByRole("link", { name: "Open board" }).getAttribute("href")).toBe(
-        "/workboard?board=platform",
-      );
+      const accessory = page.locator(".workboard-session-chip");
+      await expect.poll(() => accessory.textContent()).toContain(readyCard.title);
+      expect(
+        new URL(
+          (await miniWidget.getByRole("link", { name: "Open board" }).getAttribute("href"))!,
+          suite.server.baseUrl,
+        ).pathname,
+      ).toBe("/workboard/platform");
       if (recordProof) {
         await page.screenshot({
           path: path.join(
@@ -668,7 +677,10 @@ suite.define(() => {
         });
       }
 
-      const cardElement = await page.locator("openclaw-workboard-card-widget").elementHandle();
+      const cardElement = await page
+        .locator("openclaw-plugin-view")
+        .filter({ has: cardWidget })
+        .elementHandle();
       expect(cardElement).not.toBeNull();
       await cardElement?.evaluate((element) => {
         Reflect.set(globalThis, "workboardPluginElementIdentity", element);
@@ -701,14 +713,17 @@ suite.define(() => {
         sessionKey,
         command: { kind: "focus_tab", tabId: "main" },
       });
+      // The shared widget runtime and the session-header lookup each resume
+      // their own read; hidden updates must not refresh either owner.
       await expect
         .poll(async () => (await gateway.getRequests("workboard.cards.list")).length)
-        .toBe(listCountBeforeHide + 1);
-      const reopenedCardElement = page.locator("openclaw-workboard-card-widget");
+        .toBe(listCountBeforeHide + 2);
+      await expect.poll(() => accessory.textContent()).toContain(readyCard.title);
+      const reopenedCardElement = page.locator("openclaw-plugin-view").filter({ has: cardWidget });
       await expect
         .poll(() =>
           reopenedCardElement.evaluate(
-            (element) => Reflect.get(element, "active") === true && element.isConnected,
+            (element) => Reflect.get(element, "presented") === true && element.isConnected,
           ),
         )
         .toBe(true);
@@ -728,6 +743,7 @@ suite.define(() => {
             ...readyCard,
             id: "card-widget-running",
             title: "Already running",
+            sessionKey: undefined,
             status: "running",
             position: 1_000,
           },
@@ -793,6 +809,7 @@ suite.define(() => {
         metadata: { automation: { boardId: "platform" } },
       };
       const gateway = await installMockGateway(page, {
+        ...workboardUi,
         controlUiWidgetKinds: widgetKinds,
         featureMethods: methods,
         operatorScopes: ["operator.read"],
@@ -852,6 +869,7 @@ suite.define(() => {
       metadata: { automation: { boardId: "platform" } },
     };
     const gateway = await installMockGateway(page, {
+      ...workboardUi,
       sessionKey,
       featureMethods: [
         "board.get",
@@ -873,11 +891,13 @@ suite.define(() => {
 
     try {
       await page.goto(controlUiSessionUrl(suite.server.baseUrl, sessionKey, "dashboard"));
-      const chip = page.locator(".board-session-surface__workboard-chip");
+      const chip = page.locator(".workboard-session-chip");
       await chip.waitFor();
       await expect.poll(() => chip.textContent()).toContain("Ship dashboard stitch");
       await expect.poll(() => chip.textContent()).toContain("Running");
-      expect(await chip.getAttribute("href")).toBe("/workboard?board=platform");
+      expect(new URL((await chip.getAttribute("href"))!, suite.server.baseUrl).pathname).toBe(
+        "/workboard/platform",
+      );
       if (recordProof) {
         await page.screenshot({
           path: path.join(
@@ -919,17 +939,17 @@ suite.define(() => {
       await chip.waitFor();
 
       await chip.click();
-      await page.waitForURL(/\/workboard\?board=platform$/u);
+      await page.waitForURL((url) => url.pathname === "/workboard/platform");
       const workboardCard = page.locator(".workboard-card", {
         hasText: "Ship dashboard stitch",
       });
       await workboardCard.waitFor();
       await workboardCard.click();
-      const cardDashboard = page.locator("openclaw-workboard-card-dashboard");
+      const cardDashboard = page.locator("openclaw-plugin-session-dashboard");
       await cardDashboard.waitFor();
       await expect
         .poll(() =>
-          cardDashboard.locator(".workboard-card-dashboard__toggle").getAttribute("aria-expanded"),
+          cardDashboard.locator(".plugin-session-dashboard__toggle").getAttribute("aria-expanded"),
         )
         .toBe("true");
       await cardDashboard.locator("openclaw-board-view").waitFor();
@@ -949,9 +969,7 @@ suite.define(() => {
         widgets: [],
       });
       await gateway.emitGatewayEvent("board.changed", { sessionKey });
-      await cardDashboard
-        .getByText("No dashboard yet — the working agent can pin widgets.")
-        .waitFor();
+      await cardDashboard.getByText("This session has no dashboard widgets yet.").waitFor();
     } finally {
       const video = page.video();
       await context.close();
@@ -970,11 +988,13 @@ suite.define(() => {
     const cases = [
       {
         name: "plugin disabled",
+        native: false,
         board: boardSnapshot,
         config: workboardConfigSnapshot(false),
       },
       {
         name: "board empty",
+        native: true,
         board: { sessionKey, revision: 1, tabs: [], widgets: [] },
         config: workboardConfigSnapshot(),
       },
@@ -983,6 +1003,7 @@ suite.define(() => {
     for (const testCase of cases) {
       await suite.withPage({ viewport: { height: 900, width: 1280 } }, async ({ page }) => {
         const gateway = await installMockGateway(page, {
+          ...(testCase.native ? workboardUi : {}),
           sessionKey,
           featureMethods: [
             "board.get",
@@ -1019,9 +1040,7 @@ suite.define(() => {
         await expect
           .poll(async () => (await gateway.getRequests("board.get")).length)
           .toBeGreaterThan(0);
-        await expect
-          .poll(() => page.locator(".board-session-surface__workboard-chip").count())
-          .toBe(0);
+        await expect.poll(() => page.locator(".workboard-session-chip").count()).toBe(0);
         expect(await gateway.getRequests("workboard.cards.list")).toHaveLength(0);
       });
     }
