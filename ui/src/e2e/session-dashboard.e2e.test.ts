@@ -376,7 +376,7 @@ suite.define(() => {
         .poll(() => widgetActions.evaluate((element) => getComputedStyle(element).opacity))
         .toBe("1");
       await previewBubble.screenshot({
-        path: path.join(path.join(suite.artifactDir, "workboard-pin"), "01-pin-hover.png"),
+        path: path.join(suite.artifactDir, "workboard-pin", "01-pin-hover.png"),
       });
     }
     await preview.getByRole("button", { name: "Pin to dashboard" }).click();
@@ -393,7 +393,7 @@ suite.define(() => {
       .toBe(true);
     if (recordProof) {
       await previewBubble.screenshot({
-        path: path.join(path.join(suite.artifactDir, "workboard-pin"), "02-pinned.png"),
+        path: path.join(suite.artifactDir, "workboard-pin", "02-pinned.png"),
       });
     }
     await gateway.setMethodResponse("board.get", pinnedBoardSnapshot);
@@ -520,7 +520,7 @@ suite.define(() => {
     expect(await page.getByText("internal path detail", { exact: false }).count()).toBe(0);
     if (recordProof) {
       await page.screenshot({
-        path: path.join(path.join(suite.artifactDir, "workboard-pin-failure"), "pin-failed.png"),
+        path: path.join(suite.artifactDir, "workboard-pin-failure", "pin-failed.png"),
       });
     }
     await context.close();
@@ -687,7 +687,8 @@ suite.define(() => {
       if (recordProof) {
         await page.screenshot({
           path: path.join(
-            path.join(suite.artifactDir, "workboard-plugin-widgets"),
+            suite.artifactDir,
+            "workboard-plugin-widgets",
             "01-plugin-widgets-ready.png",
           ),
         });
@@ -779,7 +780,8 @@ suite.define(() => {
       if (recordProof) {
         await page.screenshot({
           path: path.join(
-            path.join(suite.artifactDir, "workboard-plugin-widgets"),
+            suite.artifactDir,
+            "workboard-plugin-widgets",
             "02-plugin-widgets-running.png",
           ),
         });
@@ -789,10 +791,7 @@ suite.define(() => {
       await context.close();
       if (recordProof && video) {
         await video.saveAs(
-          path.join(
-            path.join(suite.artifactDir, "workboard-plugin-widgets"),
-            "workboard-plugin-widgets.webm",
-          ),
+          path.join(suite.artifactDir, "workboard-plugin-widgets", "workboard-plugin-widgets.webm"),
         );
       }
     }
@@ -912,10 +911,7 @@ suite.define(() => {
       );
       if (recordProof) {
         await page.screenshot({
-          path: path.join(
-            path.join(suite.artifactDir, "workboard-cardboard"),
-            "01-dashboard-card-chip.png",
-          ),
+          path: path.join(suite.artifactDir, "workboard-cardboard", "01-dashboard-card-chip.png"),
         });
       }
 
@@ -965,7 +961,8 @@ suite.define(() => {
       if (recordProof) {
         await page.screenshot({
           path: path.join(
-            path.join(suite.artifactDir, "workboard-cardboard"),
+            suite.artifactDir,
+            "workboard-cardboard",
             "02-workboard-card-dashboard.png",
           ),
         });
@@ -984,10 +981,7 @@ suite.define(() => {
       await context.close();
       if (recordProof && video) {
         await video.saveAs(
-          path.join(
-            path.join(suite.artifactDir, "workboard-cardboard"),
-            "workboard-cardboard.webm",
-          ),
+          path.join(suite.artifactDir, "workboard-cardboard", "workboard-cardboard.webm"),
         );
       }
     }
