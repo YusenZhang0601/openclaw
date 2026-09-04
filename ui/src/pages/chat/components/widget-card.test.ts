@@ -7,14 +7,13 @@ import { bumpCanvasWidgetFrameConnectionGeneration } from "../../../lib/chat/can
 import { renderToolPreview } from "./widget-card.ts";
 
 describe("widget-card", () => {
-  it("keeps mounted frames stable but refreshes remounts and new connection generations", () => {
+  it("keeps static Canvas frames stable but refreshes remounts and new connections", () => {
     const firstPreview = {
       kind: "canvas",
       surface: "assistant_message",
       render: "url",
       viewId: "cv_surface_lease_one",
       url: "/__openclaw__/canvas/documents/cv_surface_lease_one/index.html",
-      sandbox: "scripts",
     } as const;
     const host = document.createElement("div");
     render(
@@ -69,7 +68,6 @@ describe("widget-card", () => {
           render: "url",
           viewId: "cv_tall_widget",
           url: "/__openclaw__/canvas/documents/cv_tall_widget/index.html",
-          sandbox: "scripts",
         } as const,
         "chat_message",
         { canvasPluginSurfaceUrl: "https://canvas.test/__openclaw__/cap/one" },
@@ -96,7 +94,6 @@ describe("widget-card", () => {
       render: "url",
       viewId: "cv_surface_lease_height",
       url: "/__openclaw__/canvas/documents/cv_surface_lease_height/index.html",
-      sandbox: "scripts",
     } as const;
     const host = document.createElement("div");
     document.body.append(host);
@@ -147,7 +144,6 @@ describe("widget-card", () => {
       render: "url",
       viewId: "cv_surface_lease_mounted",
       url: "/__openclaw__/canvas/documents/cv_surface_lease_mounted/index.html",
-      sandbox: "scripts",
     } as const;
     const mountedHost = document.createElement("div");
     render(
@@ -562,8 +558,6 @@ describe("widget-card presentation", () => {
     expect(host.querySelector(".chat-tool-card__preview-header")).toBeNull();
     expect(host.querySelector(".chat-tool-card__preview-label")).toBeNull();
     expect(host.querySelector(".chat-tool-card__preview-actions")).not.toBeNull();
-    expect(host.querySelector(".chat-tool-card__preview-frame")?.getAttribute("title")).toBe(
-      "Clock",
-    );
+    expect(host.querySelector("openclaw-canvas-widget-view")?.title).toBe("Clock");
   });
 });
