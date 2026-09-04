@@ -36,7 +36,6 @@ import type { PreparedNativeSessionRuntime } from "./model-setup.js";
 import type { RunEmbeddedAgentParams } from "./params.js";
 import { prepareEmbeddedAttemptPromptExecution } from "./prompt-image-preparation.js";
 import { resolveSkillWorkshopAttemptParams } from "./skill-workshop-attempt-params.js";
-import type { CodeModeRecoveryState } from "./terminal-retry-state.js";
 import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptTrajectoryRecorder } from "./types.js";
 
 type InternalRunParams = RunEmbeddedAgentInternalParams & {
@@ -125,7 +124,6 @@ type AttemptControl = {
 
 export async function dispatchEmbeddedRunAttempt(input: {
   params: InternalRunParams;
-  codeModeRecovery?: Exclude<CodeModeRecoveryState, { kind: "idle" }>;
   permissionChange?: EmbeddedRunAttemptParams["permissionChange"];
   /** Run-owned start timestamp captured before admission; projected on recovery. */
   runStartedAtMs: number;
@@ -486,7 +484,6 @@ export async function dispatchEmbeddedRunAttempt(input: {
     disableMessageTool: params.disableMessageTool,
     swarmCollector: params.swarmCollector,
     swarmOutputSchema: params.swarmOutputSchema,
-    codeModeRecovery: input.codeModeRecovery,
     forceRestartSafeTools: params.forceRestartSafeTools,
     forceCodeModeTools: params.forceCodeModeTools,
     codeModeOverride: params.codeModeOverride,

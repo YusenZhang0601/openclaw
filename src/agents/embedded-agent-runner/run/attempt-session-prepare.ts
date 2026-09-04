@@ -11,7 +11,6 @@ import {
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import type { PluginMetadataSnapshot } from "../../../plugins/plugin-metadata-snapshot.types.js";
 import { isMainSessionRestartRecoveryInputProvenance } from "../../../sessions/input-provenance.js";
-import type { NestedToolActivity } from "../../../sessions/nested-tool-activity.js";
 import { createPreparedEmbeddedAgentSettingsManager } from "../../agent-project-settings.js";
 import {
   applyAgentAutoCompactionGuard,
@@ -53,8 +52,6 @@ import { buildAfterTurnRuntimeContext } from "./attempt-prompt-helpers.js";
 import { resolveExistingAttemptTranscriptState } from "./attempt-transcript-helpers.js";
 import type { EmbeddedAttemptTranscriptLifecycle } from "./attempt-transcript-lifecycle.js";
 import { createUserTranscriptContextRegistry } from "./attempt-user-transcript-context-registry.js";
-import { installCodeModeOutcomeHook } from "./code-mode-outcome.js";
-import { buildCodeModeRecoveryCandidate } from "./code-mode-reconciliation.js";
 import { installMessageToolOnlyTerminalHook } from "./message-tool-terminal.js";
 import { reconcilePrePersistedCurrentUserTurn } from "./pre-persisted-user-turn.js";
 import { resolveSessionBoundaryPromptCacheKey } from "./session-boundary-prompt-cache-key.js";
@@ -93,7 +90,6 @@ export async function prepareEmbeddedAttemptAgentSession(input: {
   sessionAgentId: string;
   transcriptLifecycle: EmbeddedAttemptTranscriptLifecycle;
   sessionManager: AttemptSessionManager;
-  nestedToolActivities: readonly NestedToolActivity[];
 }) {
   const { attempt } = input;
   const settingsManager = createPreparedEmbeddedAgentSettingsManager({
@@ -217,10 +213,7 @@ export async function prepareEmbeddedAttemptAgentSession(input: {
     // Without a resolved model budget, the outer loop cannot own bounded recovery.
     contextOverflowRecoveryOwner: attempt.contextTokenBudget === undefined ? "session" : "caller",
     beforeToolBatch: input.clientToolPreparation.catalogToolHookContext
-      ? createToolLoopBatchAdmission(
-          input.clientToolPreparation.catalogToolHookContext,
-          attempt.codeModeRecovery,
-        )
+      ? createToolLoopBatchAdmission(input.clientToolPreparation.catalogToolHookContext)
       : undefined,
   });
   const activeSession = createdSession.session;
@@ -294,8 +287,6 @@ export async function prepareEmbeddedAttemptAgentSession(input: {
   };
   setActiveSessionSystemPrompt(input.initialSystemPrompt);
   let didDeliverSourceReplyViaMessageTool = false;
-  let codeModeRecoveryCandidate: ReturnType<typeof buildCodeModeRecoveryCandidate> | undefined;
-  let codeModeReconciliationReadAuthorized = false;
   const markSourceReplyDelivered = () => {
     didDeliverSourceReplyViaMessageTool = true;
   };
@@ -314,32 +305,15 @@ export async function prepareEmbeddedAttemptAgentSession(input: {
     hasRepliedRef: attempt.hasRepliedRef,
     sessionKey: attempt.sessionKey,
   });
-  if (input.clientToolPreparation.codeModeControlsEnabledForRun) {
-    installCodeModeOutcomeHook({
-      agent: activeSession.agent,
-      onReconciliationCandidate: (parentToolCallId) => {
-        if (codeModeReconciliationReadAuthorized) {
-          codeModeRecoveryCandidate = buildCodeModeRecoveryCandidate({
-            parentToolCallId,
-            nestedToolActivities: input.nestedToolActivities,
-          });
-        }
-      },
-    });
-  }
   input.markStage("agent-session");
 
   return {
     activeSession,
     allCustomTools,
     ...clientToolRuntime,
-    getCodeModeRecoveryCandidate: () => codeModeRecoveryCandidate,
     hasDeliveredSourceReply: () => didDeliverSourceReplyViaMessageTool,
     hookRunner,
     markSourceReplyDelivered,
-    setCodeModeReconciliationReadAuthorized: (value: boolean) => {
-      codeModeReconciliationReadAuthorized = clientToolRuntime.coreReadAuthorized && value;
-    },
     setActiveSessionSystemPrompt,
     settingsManager,
     refreshTools: () => {
