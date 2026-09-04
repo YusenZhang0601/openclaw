@@ -326,8 +326,9 @@ describe("authenticated profile avatar cache", () => {
   });
 
   it.each([404, 429, 503])(
-    "does not retry credentials or cache an avatar returning %s",
+    "coalesces an avatar returning %s before retrying an unversioned upload after one minute",
     async (status) => {
+      const clock = vi.spyOn(Date, "now").mockReturnValue(0);
       setAvatarGatewayOrigin("https://gateway.example.test", ["profile-token", "profile-password"]);
       const fetchAvatar = vi
         .spyOn(globalThis, "fetch")
@@ -339,7 +340,13 @@ describe("authenticated profile avatar cache", () => {
         );
       vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:profile-uploaded");
 
-      await expect(resolveAvatarImageUrl("/api/users/profile-ada/avatar")).resolves.toBeNull();
+      const missing = resolveAvatarImageUrl("/api/users/profile-ada/avatar");
+      await expect(missing).resolves.toBeNull();
+      clock.mockReturnValue(59_999);
+      expect(resolveAvatarImageUrl("/api/users/profile-ada/avatar")).toBe(missing);
+      expect(fetchAvatar).toHaveBeenCalledOnce();
+
+      clock.mockReturnValue(60_000);
       await expect(resolveAvatarImageUrl("/api/users/profile-ada/avatar")).resolves.toBe(
         "blob:profile-uploaded",
       );
@@ -385,6 +392,26 @@ describe("authenticated profile avatar cache", () => {
     expect(revokeObjectURL).toHaveBeenCalledTimes(2);
     expect(revokeObjectURL).toHaveBeenNthCalledWith(1, imageUrls[0]);
     expect(revokeObjectURL).toHaveBeenNthCalledWith(2, imageUrls[1]);
+  });
+
+  it("evicts settled misses in LRU order without retrying retained avatars", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(0);
+    setAvatarGatewayOrigin("https://gateway.example.test", ["profile-token"]);
+    const fetchAvatar = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response(null, { status: 404 }));
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL");
+
+    const pending = Array.from({ length: 130 }, (_, index) =>
+      Promise.resolve(resolveAvatarImageUrl(`/api/users/profile-${index}/avatar`)),
+    );
+    expect(await Promise.all(pending)).toEqual(Array.from({ length: 130 }, () => null));
+    expect(resolveAvatarImageUrl("/api/users/profile-129/avatar")).toBe(pending[129]);
+    expect(fetchAvatar).toHaveBeenCalledTimes(130);
+
+    await expect(resolveAvatarImageUrl("/api/users/profile-0/avatar")).resolves.toBeNull();
+    expect(fetchAvatar).toHaveBeenCalledTimes(131);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
   });
 
   it("rejects non-image responses from the authenticated avatar endpoint", async () => {
